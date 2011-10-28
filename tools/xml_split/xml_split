@@ -319,7 +319,14 @@ sub parser_end_tag_grouped
 sub end_file_grouped
   { my( $state, $options)= @_;
     print {$state->{current_fh}} qq{\n} unless( $options->{no_nl});
-    unless( $state->{current_fh} == $state->{main_fh})
+
+    if ($state->{no_pi}) 
+      {	print {$state->{current_fh}} qq{</xml_split:root>\n} if ($state->{current_fh});
+	close $state->{current_fh} if ($state->{current_fh});
+	$state->{current_fh} = 0;
+	$state->{current_nb} = 0; 	    
+      }
+    elsif ($state->{current_fh} != $state->{main_fh})
       { print {$state->{current_fh}} qq{</xml_split:root>\n};
         close $state->{current_fh};
         $state->{current_nb}=0; 
@@ -340,7 +347,7 @@ sub char_parser
 sub parser_declaration
   { my( $state, $p, $version, $encoding, $standalone)= @_;
     $state->{xml_declaration}=  $p->recognized_string || ''; 
-    print {$state->{main_fh}} $state->{xml_declaration}; 
+    print {$state->{main_fh}} $state->{xml_declaration} unless ($state->{no_pi}); 
     # avoid calling original_string if not needed
     #if( !$state->{xml_declaration} || $state->{xml_declaration}=~ m{encoding\s*=\s*["']utf-?8["']}i)
     #  { $state->{utf8_encoded}=1;
