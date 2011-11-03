@@ -159,14 +159,21 @@ sub parser_options
     unless( $state->{no_pi})
       { my $file_name= $state->main_file_name(); # main file name
         warn "generating main file $file_name\n" if( $state->{verbose});
-        open( my $out, '>', $file_name) or die "cannot create main file '$file_name': $!";
-        $state->{main_fh}= $out;
-        $state->{current_fh}= $out;
+        open (my $out, '>', $file_name) or die "cannot create main file '$file_name': $!";
+        $state->{main_fh} = $out;
+        $state->{current_fh} = $out;
+      } 
+    else 
+      {
+	$state->{start_tags} = ();
+	$state->{close_tags} = ();
+	#denotes white space level used for building tags from level 0 to l and reverse 
+	$state->{ws} = 0; 
       }
    my $handlers= { Start   => sub { $state->{handlers}->{Start}->(   $state, shift( @_)); },
                    End     => sub { $state->{handlers}->{End}->(     $state, shift( @_)); },
                    Default => sub { $state->{handlers}->{Default}->( $state, shift( @_)); },
-                   XMLDecl => sub { parser_declaration( $state, @_);                      },
+                   XMLDecl => sub { parser_declaration( $state, @_);                  },
                  };
     
     return { Handlers => $handlers };
@@ -281,24 +288,51 @@ sub parser_default_size
 #                                                                                 #
 ###################################################################################
 
+# increase/decrease white space level
+sub inc_ws
+  { my ($state) = @_;
+    $_ = "  " x ++$state->{ws};
+  }
+
+sub dec_ws
+  { my ($state) = @_;
+    "  " x --$state->{ws};
+  }
+
 sub parser_start_tag_grouped
   { my( $state, $p)= @_;
     if( $p->depth == $state->{level})
       { if( !$state->{current_nb})
           { $state->{seq_nb}++;
+	    
             my $file_name= $state->file_name;
             # prepare chunk file
             warn "generating $file_name\n" if( $state->{verbose});
             open( my $out, '>', $file_name) or die "cannot create output file '$file_name': $!";
             $state->{current_fh}= $out;
-            print {$state->{current_fh}} join( "\n", grep { $_ } ( $state->{xml_declaration}, 
-                                                                   qq{<xml_split:root xmlns:xml_split="http://xmltwig.com/xml_split">\n  }
-                                                                 )
-                                             );
+
+	    my $o_str = "";
+	    if ($state->{no_pi}) # here we create the n .. l starting tags for each splitted file
+	      {	foreach my $tag (($state->{xml_declaration}, @{$state->{start_tags}})) 
+		  {
+		    $o_str .= "$tag\n" . inc_ws($state);
+		  }
+	      } 
+	    else # if we have a main file we simply add the xml_split tags
+	      {	$o_str = join ("\n", ($state->{xml_declaration}, 
+				      qq{<xml_split:root xmlns:xml_split="http://xmltwig.com/xml_split">\n  }));
+	      }
+
+            print {$state->{current_fh}} $o_str;
+
             # output pi
             unless( $state->{no_pi})
               { print {$state->{main_fh}} $state->include( $file_name) ; }
           }
+      } 
+    else 
+      {	# unless we have reached the desired level we store the tag for appending them later in splitted files
+	push (@{$state->{start_tags} }, $p->original_string) if ($state->{no_pi});
       }
     print {$state->{current_fh}} $p->original_string if( $state->{current_fh});
   }
@@ -308,23 +342,33 @@ sub parser_end_tag_grouped
     if( $p->depth == $state->{level})
       { print {$state->{current_fh}} $p->original_string if( $state->{current_fh});
         $state->{current_nb}++;
-        if( $state->{current_nb} == $state->{group}) { end_file_grouped( $state); } 
+
+        if( $state->{current_nb} == $state->{group}) { end_file_grouped($state, { no_nl   => 0,
+										  context => [$p->context]}); } 
       }
     else
-      { if($p->depth < $state->{level}) { end_file_grouped( $state, { no_nl => 1 }); } 
+      { if($p->depth < $state->{level}) { end_file_grouped( $state, { no_nl   => 1, 
+								      context => [$p->context]}); } 
         print {$state->{current_fh}} $p->original_string if( $state->{current_fh});
       }
   }
 
 sub end_file_grouped
-  { my( $state, $options)= @_;
+    { my( $state, $options)= @_;
     print {$state->{current_fh}} qq{\n} unless( $options->{no_nl});
 
     if ($state->{no_pi}) 
-      {	print {$state->{current_fh}} qq{</xml_split:root>\n} if ($state->{current_fh});
+      {	my $o_str = "";
+	foreach my $tag (reverse(@{$options->{context}}))
+	  {
+	    $o_str .= dec_ws($state) . "</$tag>\n";
+	  }
+	print {$state->{current_fh}} $o_str if ($state->{current_fh});
+	
 	close $state->{current_fh} if ($state->{current_fh});
 	$state->{current_fh} = 0;
-	$state->{current_nb} = 0; 	    
+	$state->{current_nb} = 0;
+	$state->{ws} = 0;
       }
     elsif ($state->{current_fh} != $state->{main_fh})
       { print {$state->{current_fh}} qq{</xml_split:root>\n};
@@ -354,7 +398,6 @@ sub parser_declaration
     #    $p->setHandlers( Char => \&char_parser);
     #  }
   } 
-
 
 sub twig_options
   { my( $state)= @_;
