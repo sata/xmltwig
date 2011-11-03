@@ -598,6 +598,18 @@ The size can be given in bytes, Kb, Mb or Gb.
 groups <nb> elements in a single file. The content of each file is
 enclosed in a new element (C<xml_split::root>), so it's well-formed XML.
 
+unless -d is given. -d will exclude the Main XML file which uses Process
+Instructions #include to be able to glue the document together with
+xml_merge. 
+
+when -g is combined with -d, it adds root..l tags in tags before the grouping 
+for each child document and also ending with such tags.
+
+If -l switch isn't supplied then it defaults to 1.
+
+Example: when combining with -l 2 -g 3 -d, the script will group three
+elements in each child file on level 2, with root tag up to the split level of 2.
+ 
 =item -b <name>
 
 base name for the output, files will be named <base>-<nb><.ext>
