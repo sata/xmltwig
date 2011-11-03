@@ -291,7 +291,7 @@ sub parser_default_size
 # increase/decrease white space level
 sub inc_ws
   { my ($state) = @_;
-    $_ = "  " x ++$state->{ws};
+    "  " x ++$state->{ws};
   }
 
 sub dec_ws
