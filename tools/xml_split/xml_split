@@ -15,16 +15,17 @@ $Getopt::Std::STANDARD_HELP_VERSION=1; # to stop processing after --help or --ve
 use vars qw( $VERSION $USAGE);
 
 $VERSION= "0.06";
-$USAGE= "xml_split [-l <level> [-s <size> | -g <nb_grouped>] | -c <cond>] [-b <base>] [-n <nb>] [-e <ext>] [-p <plugin>] [-I <plugin_dir>] [-i] [-d] [-v] [-h] [-m] [-V] <files>\n";
+$USAGE= "xml_split [-l <level> [-s <size> | -g <nb_grouped>] | -c <cond>] [-b <base>] [-n <nb>] [-e <ext>] [-p <plugin>] [-I <plugin_dir>] [-o <path>] [-i] [-d] [-v] [-h] [-m] [-V] <files>\n";
 
 { # main block
 
 my $opt={};
-getopts('l:c:b:g:n:e:p:is:dvhmV', $opt);
+getopts('l:c:b:g:n:e:p:o:is:dvhmV', $opt);
 
 # defaults
 $opt->{n} ||= 2; # number of digits used for creating parts
 $opt->{I} ||= "$ENV{HOME}/.xml_split";
+$opt->{o} ||= 0;
 
 if( $opt->{h}) { die $USAGE, "\n";            }
 if( $opt->{m}) { exec "pod2text $RealBin/$RealScript"; }
@@ -55,6 +56,7 @@ my $options= { cond     => $opt->{c},
                no_pi    => $opt->{d},
                verbose  => $opt->{v}, 
                xinclude => $opt->{i} ? 1 : 0,
+
              };
 
 
@@ -67,10 +69,10 @@ if( my $plugin= $opt->{p})
     import $plugin;
     $state= $plugin->new( $options);
   }
-  
 
 if( $opt->{s})
   { $state||= xml_split::state::parser->new( $options);
+    $state->{out_path} = $opt->{o};
     $state->{level} = $opt->{l};
     $state->{size}  = $opt->{s};
     $state->{current_size}=0;
@@ -80,6 +82,7 @@ if( $opt->{s})
   }
 elsif( $opt->{g})
   { $state||= xml_split::state::parser->new( $options);
+    $state->{out_path} = $opt->{o};
     $state->{level}= $opt->{l};
     $state->{group}= $opt->{g};
     $state->{handlers}= { Start => \&parser_start_tag_grouped, End => \&parser_end_tag_grouped , Default => \&parser_default_grouped}; 
@@ -88,6 +91,7 @@ elsif( $opt->{g})
   }
 elsif( $opt->{l})
   { $state||= xml_split::state::parser->new( $options);
+    $state->{out_path} = $opt->{o};
     $state->{level}= $opt->{l};
     $state->{handlers}= { Start => \&parser_start_tag_level, End => \&parser_end_tag_level , Default => \&parser_default_level}; 
     warn "using XML::Parser\n" if( $opt->{v});
@@ -483,7 +487,14 @@ sub new
 sub file_name
   { my( $state)= @_;
     my $nb= sprintf( "%0$state->{nb_digits}d", $state->{seq_nb});
-    my $file_name= "$state->{base}-$nb$state->{ext}";
+    
+    my $file_name;
+    if ($state->{out_path}) { 
+      $file_name = "$state->{out_path}/$state->{base}-$nb$state->{ext}";
+    } else {
+      $file_name = "$state->{base}-$nb$state->{ext}";
+    }
+
     $file_name =~ s{\\}{/}g; 
     return $file_name;
   }
@@ -491,7 +502,14 @@ sub file_name
 sub main_file_name
   { my( $state)= @_;
     my $nb= sprintf( "%0$state->{nb_digits}d", 0);
-    my $file_name= "$state->{base}-$nb$state->{ext}";
+    my $file_name;
+    
+    if ($state->{out_path}) { 
+      $file_name = "$state->{out_path}/$state->{base}-$nb$state->{ext}";
+    } else {
+      $file_name = "$state->{base}-$nb$state->{ext}";
+    }
+
     return $file_name;
   }
 1;
@@ -634,6 +652,10 @@ defaults to 2
 extension to use for generated files
 
 defaults to the original file extension or C<.xml>
+
+=item -o <path>
+
+the splitted files are outputted to path instead of where the file to split exist.
 
 =item -i
 
