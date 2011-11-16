@@ -178,6 +178,7 @@ sub parser_options
                    End     => sub { $state->{handlers}->{End}->(     $state, shift( @_)); },
                    Default => sub { $state->{handlers}->{Default}->( $state, shift( @_)); },
                    XMLDecl => sub { parser_declaration( $state, @_);                  },
+		   Doctype => sub { doctype_declaration($state, @_); },
                  };
     
     return { Handlers => $handlers };
@@ -315,9 +316,13 @@ sub parser_start_tag_grouped
             open( my $out, '>', $file_name) or die "cannot create output file '$file_name': $!";
             $state->{current_fh}= $out;
 
-	    my $o_str = "";
+	    my $o_str = $state->{xml_declaration} . "\n";
+	    
+	    # append doctype if its defined
+	    if (defined($state->{doctype})) { $o_str .= $state->{doctype} . "\n" } 
+	    
 	    if ($state->{no_pi}) # here we create the n .. l starting tags for each splitted file
-	      {	foreach my $tag (($state->{xml_declaration}, @{$state->{start_tags}})) 
+	      {	foreach my $tag (@{$state->{start_tags}}) 
 		  {
 		    $o_str .= "$tag\n" . inc_ws($state);
 		  }
@@ -390,6 +395,20 @@ sub parser_default_grouped
 sub char_parser
   { my( $state, $p)=( shift, shift);
     print {$state->{current_fh}} $_[0] if( $state->{current_fh});
+  }
+
+sub doctype_declaration
+  { my ($state, $p, $name, $sysid, $pubid, $internal)  = @_;
+  
+    $state->{doctype} = "<!DOCTYPE $name ";
+
+    if (defined($sysid)) {
+    $state->{doctype} .= "SYSTEM \"$sysid\">";
+    } else {
+    $state->{doctype} .= "PUBLIC \"$pubid\">";
+    }
+
+    # might be a good idea to handle internal in future?
   }
 
 sub parser_declaration
