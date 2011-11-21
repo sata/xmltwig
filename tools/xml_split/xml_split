@@ -169,8 +169,8 @@ sub parser_options
       } 
     else 
       {
-	$state->{start_tags} = ();
-	$state->{close_tags} = ();
+	$state->{start_tags} = [];
+	$state->{close_tags} = [];
 	#denotes white space level used for building tags from level 0 to l and reverse 
 	$state->{ws} = 0; 
       }
@@ -309,7 +309,6 @@ sub parser_start_tag_grouped
     if( $p->depth == $state->{level})
       { if( !$state->{current_nb})
           { $state->{seq_nb}++;
-	    
             my $file_name= $state->file_name;
             # prepare chunk file
             warn "generating $file_name\n" if( $state->{verbose});
@@ -341,7 +340,7 @@ sub parser_start_tag_grouped
       } 
     else 
       {	# unless we have reached the desired level we store the tag for appending them later in splitted files
-	push (@{$state->{start_tags} }, $p->original_string) if ($state->{no_pi});
+	push (@{$state->{start_tags} }, $p->original_string) 	if ($state->{no_pi});
       }
     print {$state->{current_fh}} $p->original_string if( $state->{current_fh});
   }
@@ -351,6 +350,15 @@ sub parser_end_tag_grouped
     if( $p->depth == $state->{level})
       { print {$state->{current_fh}} $p->original_string if( $state->{current_fh});
         $state->{current_nb}++;
+
+	# we fetch the context only once, since we have reached the grouping level (depth == level)
+	# it's not neccessary do this each time
+	if (scalar @{$state->{close_tags}} == 0) {
+	  # context returns an array reference, we dereference it 
+	  # copy it,  reverse it and store the reference in close_tags 
+	  my @arr = reverse @{[$p->context]}; 
+	  $state->{close_tags} = \@arr;
+	}	
 
         if( $state->{current_nb} == $state->{group}) { end_file_grouped($state, { no_nl   => 0,
 										  context => [$p->context]}); } 
@@ -368,7 +376,7 @@ sub end_file_grouped
 
     if ($state->{no_pi}) 
       {	my $o_str = "";
-	foreach my $tag (reverse(@{$options->{context}}))
+	foreach my $tag (@{$state->{close_tags}})
 	  {
 	    $o_str .= dec_ws($state) . "</$tag>\n";
 	  }
