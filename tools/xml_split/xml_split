@@ -1,4 +1,4 @@
-#!/usr/bin/env perl -w
+#!/usr/bin/env perl
 # $Id: /xmltwig/trunk/tools/xml_split/xml_split 17 2007-06-04T11:57:10.366292Z mrodrigu  $
 use strict;
 
