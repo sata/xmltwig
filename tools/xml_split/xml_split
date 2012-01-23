@@ -338,7 +338,7 @@ sub parser_start_tag_grouped
               { print {$state->{main_fh}} $state->include( $file_name) ; }
           }
       } 
-    else 
+    elsif ($p->depth < $state->{level})
       {	# unless we have reached the desired level we store the tag for appending them later in splitted files
 	push (@{$state->{start_tags} }, $p->original_string) 	if ($state->{no_pi});
       }
